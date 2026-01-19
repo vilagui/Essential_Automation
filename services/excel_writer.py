@@ -144,5 +144,5 @@ def salvar_dados_multiplos(wb, dados_estruturados):
                 safe_write(ws_resumo, "F", linha_atual, dados_ref.get("uc", ""))
                 safe_write(ws_resumo, "G", linha_atual, dados_ref.get("endereco", ""))
                 linha_atual += 1
-
+                
     return wb
