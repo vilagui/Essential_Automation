@@ -92,7 +92,7 @@ def extrair_fatura(texto: str) -> dict:
                 dados["energia_gerada"] = normalizar_numero_br(m_ger_scee.group(1))
         
         # Crédito
-        m_credito = re.search(r"CRÉDITO RECEBIDO.*?(\d+,\d+)", bloco_busca)
+        m_credito = re.search(r"CRÉDITO RECEBIDO.*?([\d\.]+,\d{2})", bloco_busca)
         if m_credito:
             dados["credito_recebido"] = normalizar_numero_br(m_credito.group(1))
 
@@ -102,7 +102,7 @@ def extrair_fatura(texto: str) -> dict:
             dados["saldo"] = normalizar_numero_br(m_saldo.group(1))
 
     # --- 7. VALOR ---
-    m = re.search(r"TOTAL\s+(\d+,\d+)", texto)
+    m = re.search(r"TOTAL\s+([\d\.]+,\d{2})", texto)
     dados["valor_fatura"] = normalizar_numero_br(m.group(1)) if m else 0.0
 
     # --- 8. HISTÓRICO DE CONSUMO (NOVO) ---
