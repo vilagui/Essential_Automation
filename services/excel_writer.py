@@ -7,7 +7,7 @@ def preparar_planilha(caminho_entrada, qtd_geradoras, qtd_beneficiarias):
     # Preparar Geradoras
     if "UC GERADORA" in wb.sheetnames:
         ws_modelo_ger = wb["UC GERADORA"]
-        for i in range(qtd_gradoras):
+        for i in range(qtd_geradoras):
             nome_aba = f"UC GERADORA {i+1}" if i > 0 else "UC GERADORA"
             if i == 0: ws_modelo_ger.title = nome_aba
             else: 
@@ -124,11 +124,11 @@ def salvar_dados_multiplos(wb, dados_estruturados):
                             
                             # Se achou a linha e a célula de consumo está vazia (para não sobrescrever dados reais)
                             if linha_hist:
-                                celula_consumo = ws[f"{cols_uso['consumo']}{linha_hist}"]
-                                if not celula_consumo.value:
-                                    celula_consumo.value = hist['consumo']
-                                    print(f"Histórico preenchido: {mes_hist} - {hist['consumo']} kWh na aba {nome_aba}")
-
+                                 # Não sobrescrever o mês da fatura atual
+                                if mes_hist != dados.get("mes"):
+                                    ws[f"{cols_uso['consumo']}{linha_hist}"] = hist['consumo']
+                                    print(f"Histórico preenchido: {mes_hist}/{hist['ano']} "f"- {hist['consumo']} kWh na aba {nome_aba}")
+                        
     # --- 3. RESUMO (UC e Endereço) ---
     ws_resumo = None
     for sheet in wb.sheetnames:
