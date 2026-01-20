@@ -78,13 +78,13 @@ def salvar_dados_multiplos(wb, dados_estruturados):
             }
         if nome_aba in wb.sheetnames:
             ws = wb[nome_aba]
-            
+
             for dados in faturas:
                 # --- 1. DADOS DO MÊS ATUAL (DA FATURA) ---
                 mes_pdf = dados.get("mes", "")
                 if mes_pdf and mes_pdf in mapa_meses:
                     mes_excel = mapa_meses[mes_pdf]
-                    
+
                     # Achar linha
                     linha_destino = None
                     for row in range(5, 40):
@@ -124,7 +124,7 @@ def salvar_dados_multiplos(wb, dados_estruturados):
                             
                             # Se achou a linha e a célula de consumo está vazia (para não sobrescrever dados reais)
                             if linha_hist:
-                                celula_consumo = ws[f"{cols['consumo']}{linha_hist}"]
+                                celula_consumo = ws[f"{cols_uso['consumo']}{linha_hist}"]
                                 if not celula_consumo.value:
                                     celula_consumo.value = hist['consumo']
                                     print(f"Histórico preenchido: {mes_hist} - {hist['consumo']} kWh na aba {nome_aba}")
