@@ -14,6 +14,35 @@ def normalizar_texto(texto: str) -> str:
 
 # AQUI VAI A PARTE DO HISTORICO (Como tá dando problema pro grupo B e o grupo A é mais complexo) vou tentar fazer depois
 
+def extrair_historico_consumo(texto: str) -> list:
+    """
+    Captura as colunas: Mês/Ano, Demanda (P, FP, RE), 
+    Consumo Faturado (P, FP, RE) e Horário Reservado (Consumo).
+    """
+    historico = []
+    # Regex para capturar a linha da tabela de histórico (image_b84cef.png)
+    # Procura Mes/Ano seguido de 7 a 9 blocos numéricos
+    padrao = r"(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s*[\/\-]\s*(\d{2,4})((?:\s+[\d\.,]+){7,9})"
+    
+    matches = re.findall(padrao, texto)
+    
+    for mes, ano, valores_str in matches:
+        # Divide os valores numéricos capturados no bloco
+        v = valores_str.strip().split()
+        if len(v) >= 7:
+            historico.append({
+                "mes": mes,
+                "ano": int(ano),
+                "demanda_ponta": normalizar_numero_br(v[0]),
+                "demanda_fora_ponta": normalizar_numero_br(v[1]),
+                "demanda_reativo": normalizar_numero_br(v[2]),
+                "consumo_ponta": normalizar_numero_br(v[3]),
+                "consumo_fora_ponta": normalizar_numero_br(v[4]),
+                "consumo_reativo": normalizar_numero_br(v[5]),
+                "reservado_consumo": normalizar_numero_br(v[6])
+            })
+    return historico
+
 def extrair_fatura(texto: str) -> dict:
     dados = {}
     texto = normalizar_texto(texto)
@@ -49,17 +78,26 @@ def extrair_fatura(texto: str) -> dict:
 
     # --- 5. ENERGIA ATIVA (Consumo Atual) ---
     dados["energia_ativa"] = 0.0
-    m_ativa = re.search(r"ENERGIA ATIVA - KWH ÚNICO\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_ativa_p = re.search(r"ENERGIA ATIVA - KWH PONTA\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_ativa_fp = re.search(r"ENERGIA ATIVA - KWH FORA PONTA\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_ativa_hr = re.search(r"ENERGIA ATIVA - KWH RESERVADO\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_ativa = m_ativa_p+m_ativa_fp+m_ativa_hr
+
     if m_ativa:
         dados["energia_ativa"] = normalizar_numero_br(m_ativa.group(1))
 
     # --- 6. GERAÇÃO, CRÉDITO E SALDO ---
+
     dados["energia_gerada"] = 0.0
     dados["credito_recebido"] = 0.0
     dados["saldo"] = 0.0
 
     # Tenta geração na linha
-    m_geracao_linha = re.search(r"ENERGIA GERAÇÃO - KWH ÚNICO\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_geracao_linha_ponta = re.search(r"ENERGIA GERAÇÃO - KWH PONTA\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_geracao_linha_foraponta = re.search(r"ENERGIA GERAÇÃO - KWH FORA PONTA\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_geracao_linha_reservado = re.search(r"ENERGIA GERAÇÃO - KWH RESERVADO\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)", texto)
+    m_geracao_linha = m_geracao_linha_foraponta+m_geracao_linha_ponta+m_geracao_linha_reservado
+
     if m_geracao_linha:
         dados["energia_gerada"] = normalizar_numero_br(m_geracao_linha.group(1))
     
@@ -79,21 +117,24 @@ def extrair_fatura(texto: str) -> dict:
         if m_credito:
             dados["credito_recebido"] = normalizar_numero_br(m_credito.group(1))
 
-        # Saldo (com regex robusta para pontos e vírgulas)
-        m_saldo = re.search(r"SALDO KWH\s*[:=]?\s*([\d\.]+,\d{2})", bloco_busca)
-        if m_saldo:
-            dados["saldo"] = normalizar_numero_br(m_saldo.group(1))
+
+        # Saldo (Captura todos os valores P, FP e HR e soma)
+        m_saldo_bloco = re.search(r"SALDO KWH[\s\S]*?(?=[\n\r]|$)", bloco_busca)
+        if m_saldo_bloco:
+            trecho_saldos = m_saldo_bloco.group(0)
+            # Encontra todos os padrões numéricos (ex: 0,00 ou 1.423,32) no trecho
+            valores_encontrados = re.findall(r"[\d\.]*,\d{2}", trecho_saldos)
+    
+            # Soma todos os valores convertidos
+            dados["saldo"] = sum(normalizar_numero_br(v) for v in valores_encontrados)
 
     # --- 7. VALOR ---
     m = re.search(r"TOTAL\s+([\d\.]+,\d{2})", texto)
     dados["valor_fatura"] = normalizar_numero_br(m.group(1)) if m else 0.0
 
-    # --- 8. HISTÓRICO DE CONSUMO (NOVO) ---
-    # Extrai lista de consumos passados para caso seja enviado apenas 1 PDF
-    #dados["historico"] = extrair_historico_consumo(texto)
-    # LINHA DE DEBUG PARA O MAPPER:
-    print(f"\n[DEBUG MAPPER] UC: {dados.get('uc')} | Mês Ref: {dados.get('mes')}")
-    print(f"[DEBUG MAPPER] Histórico capturado: {dados['historico']}\n")
+    # --- 8. HISTÓRICO DE CONSUMO E DEMANDA (NOVO) ---
+    
+    
 
     return dados
 
