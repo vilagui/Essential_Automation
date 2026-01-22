@@ -42,15 +42,25 @@ def extrair_fatura(texto: str) -> dict:
     dados = {}
     t_norm = normalizar_texto(texto)
     
-    # 1. Identificação básica (UC, Mês, Ano)
-    m_uc = re.search(r"(\d{7,})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)/(\d{4})", t_norm)
-    dados.update({
-        "uc": m_uc.group(1) if m_uc else "", 
-        "mes": m_uc.group(2) if m_uc else "", 
-        "ano": m_uc.group(3)[2:] if m_uc else "00"
-    })
+    # --- 1. MÊS E ANO ATUAL ---
+    m = re.search(r"(\d{7,})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)/(\d{4})", texto)
+    dados["uc"] = m.group(1) if m else ""
+    dados["mes"] = m.group(2) if m else ""
+    dados["ano"] = int(m.group(3)) if m else 0
 
-    # 2. Consumo e Demanda Atuais (Postos Tarifários)
+    # --- 2. ENDEREÇO ---
+    if "ENDEREÇO DE ENTREGA:" in texto:
+        trecho = texto.split("ENDEREÇO DE ENTREGA:", 1)[1]
+        dados["endereco"] = trecho.split("CEP:", 1)[0].strip()
+    else:
+        dados["endereco"] = ""
+
+    # --- 3. DATAS ---
+    m = re.search(r"(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+\d+\s+\d{2}/\d{2}/\d{4}", texto)
+    dados["data_leitura_anterior"] = m.group(1) if m else ""
+    dados["data_leitura_atual"] = m.group(2) if m else ""
+
+    # 4. Consumo e Demanda Atuais (Postos Tarifários)
     pats = {
         "c_p": r"ENERGIA ATIVA - KWH PONTA\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)",
         "c_fp": r"ENERGIA ATIVA - KWH FORA PONTA\s+\d+\s+\d+\s+[\d,]+\s+([\d,]+)",
@@ -63,7 +73,7 @@ def extrair_fatura(texto: str) -> dict:
         m = re.search(pat, t_norm)
         dados[chave] = normalizar_numero_br(m.group(1)) if m else 0.0
 
-    # 3. Saldo SCEE (Soma dos Créditos P + FP + HR)
+    # 5. Saldo SCEE (Soma dos Créditos P + FP + HR)
     dados["saldo"] = 0.0
     if "INFORMAÇÕES DO SCEE" in t_norm:
         bloco = t_norm[t_norm.find("INFORMAÇÕES DO SCEE") : t_norm.find("INFORMAÇÕES DO SCEE")+800]
@@ -72,12 +82,12 @@ def extrair_fatura(texto: str) -> dict:
             # Soma todos os valores de saldo encontrados no trecho
             dados["saldo"] = sum(normalizar_numero_br(v) for v in re.findall(r"[\d\.]*,\d{2}", m_s.group(0)))
 
-    # 4. Histórico e Valor Total
+    # 6. Histórico e Valor Total
     dados["historico"] = extrair_historico_consumo(t_norm)
     m_val = re.search(r"TOTAL\s+([\d\.]+,\d{2})", t_norm)
     dados["valor_fatura"] = normalizar_numero_br(m_val.group(1)) if m_val else 0.0
     
-    # Geração Distribuída (Crédito)
+    # 7. Geração Distribuída (Crédito)
     m_cred = re.search(r"CRÉDITO RECEBIDO.*?([\d\.]+,\d{2})", t_norm)
     dados["credito_recebido"] = normalizar_numero_br(m_cred.group(1)) if m_cred else 0.0
 
