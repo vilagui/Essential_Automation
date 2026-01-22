@@ -1,125 +1,121 @@
 import streamlit as st
 import pdfplumber
-import os
-from services.fatura_mapper import extrair_fatura
-from services.excel_writer import preparar_planilha, salvar_dados_multiplos
+import io
+# Importação dos Mappers específicos
+from services.fatura_mapper import extrair_fatura as extrair_B
+from services.fatura_mapperA import extrair_fatura as extrair_A
+# Importação dos Writers específicos
+from services.excel_writer import preparar_planilha as prep_B, salvar_dados_multiplos as salvar_B
+from services.excel_writterA import preparar_planilha as prep_A, salvar_dados_A as salvar_A
 
-st.set_page_config(page_title="Balanço Equatorial Multi-UC", layout="wide")
+st.set_page_config(page_title="Balanço Multi-UC", layout="wide")
 
-st.title("⚡ Sistema de Balanço Energético (Multi-UC)")
+st.title("⚡ Sistema de Balanço Energético")
 st.subheader("Essencial Energia Eficiente")
-st.markdown("Configure a quantidade de UCs, faça o upload da planilha base e das faturas.")
 
 # --- BARRA LATERAL PARA CONFIGURAÇÃO ---
 with st.sidebar:
-    st.header("Configuração")
+    st.header("⚙️ Configuração")
+    
+    # 1. Input crucial: Define qual lógica de código o sistema seguirá
+    grupo_selecionado = st.radio(
+        "Selecione o Grupo Tarifário:", 
+        ["A", "B"], 
+        help="Grupo A: Alta Tensão (Demanda e Postos Tarifários). Grupo B: Baixa Tensão (Consumo Único)."
+    )
+    
+    st.markdown("---")
     qtd_geradoras = st.number_input("Qtd. de UC Geradoras", min_value=1, value=1, step=1)
     qtd_beneficiarias = st.number_input("Qtd. de UC Beneficiárias", min_value=0, value=0, step=1)
 
-# --- UPLOAD DA PLANILHA BASE ---
+# --- 2. UPLOAD DA PLANILHA BASE ---
 st.subheader("1. Planilha Modelo")
-arquivo_excel = st.file_uploader("Envie o arquivo 'BALANÇO E COMPENSAÇÃO.xlsx'", type=["xlsx"])
+tipo_template = "BALANÇO_A.xlsx" if grupo_selecionado == "A" else "BALANÇO_B.xlsx"
+arquivo_excel = st.file_uploader(f"Envie o arquivo Excel para o Grupo {grupo_selecionado}", type=["xlsx"])
 
-# --- UPLOADS DINÂMICOS ---
 if arquivo_excel:
     dados_processamento = []
     
-    st.subheader("2. Upload das Faturas")
+    # --- 3. UPLOAD DAS FATURAS ---
+    st.subheader(f"2. Upload das Faturas (Grupo {grupo_selecionado})")
     
-    # Cria abas visuais no Streamlit para organizar os uploads
     abas_titulos = [f"Geradora {i+1}" for i in range(qtd_geradoras)] + \
                    [f"Beneficiária {i+1}" for i in range(qtd_beneficiarias)]
     tabs = st.tabs(abas_titulos)
     
     idx_tab = 0
-    
-    # --- Loop para Geradoras ---
+    # Interface dinâmica para Geradoras
     for i in range(qtd_geradoras):
         with tabs[idx_tab]:
-            st.markdown(f"**Geradora {i+1}**: Envie as 12 faturas (Jan a Dez)")
             pdfs = st.file_uploader(f"Faturas - Geradora {i+1}", type=["pdf"], accept_multiple_files=True, key=f"ger_{i}")
-            
             if pdfs:
-                dados_processamento.append({
-                    'tipo': 'geradora',
-                    'indice': i + 1,
-                    'arquivos': pdfs
-                })
-        idx_tab += 1
+                dados_processamento.append({'tipo': 'geradora', 'indice': i + 1, 'arquivos': pdfs})
+            idx_tab += 1
 
-    # --- Loop para Beneficiárias ---
+    # Interface dinâmica para Beneficiárias
     for i in range(qtd_beneficiarias):
         with tabs[idx_tab]:
-            st.markdown(f"**Beneficiária {i+1}**: Envie as 12 faturas (Jan a Dez)")
             pdfs = st.file_uploader(f"Faturas - Beneficiária {i+1}", type=["pdf"], accept_multiple_files=True, key=f"ben_{i}")
-            
             if pdfs:
-                dados_processamento.append({
-                    'tipo': 'beneficiaria',
-                    'indice': i + 1,
-                    'arquivos': pdfs
-                })
-        idx_tab += 1
+                dados_processamento.append({'tipo': 'beneficiaria', 'indice': i + 1, 'arquivos': pdfs})
+            idx_tab += 1
 
-    # --- BOTÃO DE PROCESSAMENTO ---
+    # --- 4. PROCESSAMENTO ---
     st.markdown("---")
-    if st.button("🚀 Processar Todas as UCs e Gerar Planilha"):
-        if len(dados_processamento) == 0:
-            st.warning("Por favor, envie faturas para pelo menos uma UC.")
+    if st.button(f"🚀 Processar Balanço Grupo {grupo_selecionado}"):
+        if not dados_processamento:
+            st.warning("Envie PDFs para pelo menos uma UC.")
         else:
-            # Barra de progresso geral
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
+            progresso = st.progress(0)
+            status = st.empty()
             lista_dados_finais = []
             
-            # Passo 1: Extrair dados de todos os PDFs
-            total_items = len(dados_processamento)
+            # ESCOLHA DO MAPPER (LÓGICA DE LEITURA)
+            mapper_func = extrair_A if grupo_selecionado == "A" else extrair_B
             
+            # Fase 1: Extração
             for idx, item in enumerate(dados_processamento):
-                status_text.text(f"Processando UC {item['tipo'].title()} {item['indice']}...")
-                
+                status.text(f"Lendo faturas da {item['tipo']} {item['indice']}...")
                 faturas_extraidas = []
-                for pdf_file in item['arquivos']:
-                    texto = ""
-                    with pdfplumber.open(pdf_file) as pdf:
-                        for page in pdf.pages:
-                            texto += page.extract_text() or ""
-                    
-                    dados = extrair_fatura(texto)
-                    faturas_extraidas.append(dados)
                 
-                # Guarda os dados extraídos estruturados
+                for pdf_file in item['arquivos']:
+                    with pdfplumber.open(pdf_file) as pdf:
+                        texto = "".join([p.extract_text() or "" for p in pdf.pages])
+                    
+                    # Chama o mapper correto baseado na seleção do radio button
+                    faturas_extraidas.append(mapper_func(texto))
+                
                 lista_dados_finais.append({
                     'tipo': item['tipo'],
                     'indice': item['indice'],
                     'dados': faturas_extraidas
                 })
+                progresso.progress((idx + 1) / (len(dados_processamento) + 1))
+
+            # Fase 2: Escrita no Excel (LÓGICA DE GRAVAÇÃO)
+            status.text("Gravando dados no Excel...")
+            try:
+                if grupo_selecionado == "A":
+                    # Usa o Writer exclusivo para Alta Tensão (Colunas B, C, D, L, M, N)
+                    wb = prep_A(arquivo_excel, qtd_geradoras, qtd_beneficiarias)
+                    wb_final = salvar_A(wb, lista_dados_finais)
+                else:
+                    # Usa o Writer original para Baixa Tensão (Consumo Único)
+                    wb = prep_B(arquivo_excel, qtd_geradoras, qtd_beneficiarias)
+                    wb_final = salvar_B(wb, lista_dados_finais)
                 
-                progress_bar.progress((idx + 1) / (total_items + 1)) # +1 pois ainda tem o Excel
-            
-            # Passo 2: Manipular o Excel
-            status_text.text("Gerando abas e escrevendo no Excel...")
-            
-            # Carrega e prepara abas (duplicação)
-            wb_preparado = preparar_planilha(arquivo_excel, qtd_geradoras, qtd_beneficiarias)
-            
-            # Preenche os dados
-            wb_final = salvar_dados_multiplos(wb_preparado, lista_dados_finais)
-            
-            progress_bar.progress(100)
-            status_text.text("Concluído!")
-            
-            # Salva em memória para download
-            nome_saida = "BALANÇO_COMPLETO.xlsx"
-            wb_final.save(nome_saida) 
-            
-            st.success("Planilha gerada com sucesso! As abas foram criadas e o Resumo atualizado.")
-            
-            with open(nome_saida, "rb") as f:
+                # Download em memória
+                output = io.BytesIO()
+                wb_final.save(output)
+                
+                progresso.progress(1.0)
+                status.success(f"Planilha Grupo {grupo_selecionado} concluída!")
+                
                 st.download_button(
-                    label="📥 Baixar Planilha Final",
-                    data=f,
-                    file_name=nome_saida,
+                    label="📥 Baixar Resultado Final",
+                    data=output.getvalue(),
+                    file_name=f"BALANCO_CONSOLIDADO_GRUPO_{grupo_selecionado}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+            except Exception as e:
+                st.error(f"Erro no processamento do Excel: {e}")
