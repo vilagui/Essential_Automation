@@ -25,12 +25,10 @@ def extrair_historico_consumo(texto: str) -> list:
     matches = re.findall(padrao, texto)
     
     for mes, ano, kwh in matches:
-        consumo = normalizar_numero_br(kwh)
-        if consumo > 0:
-            historico.append({
-                "mes": mes.upper(),
-                "ano": int(ano),
-                "consumo": consumo
+        historico.append({
+            "mes": mes,
+            "ano": int(ano),
+            "consumo": normalizar_numero_br(kwh)
         })
     return historico
 
@@ -111,8 +109,5 @@ def extrair_fatura(texto: str) -> dict:
     # --- 8. HISTÓRICO DE CONSUMO (NOVO) ---
     # Extrai lista de consumos passados para caso seja enviado apenas 1 PDF
     dados["historico"] = extrair_historico_consumo(texto)
-    # LINHA DE DEBUG PARA O MAPPER:
-    print(f"\n[DEBUG MAPPER] UC: {dados.get('uc')} | Mês Ref: {dados.get('mes')}")
-    print(f"[DEBUG MAPPER] Histórico capturado: {dados['historico']}\n")
 
     return dados
