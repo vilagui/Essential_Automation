@@ -2,7 +2,7 @@ import openpyxl
 from openpyxl.cell.cell import MergedCell
 
 def preparar_planilha(caminho_entrada, qtd_geradoras, qtd_beneficiarias):
-    """Carrega o modelo e cria as abas necessárias para Geradoras e Beneficiárias."""
+    """Carrega o modelo e cria as abas necessárias duplicando os modelos existentes."""
     wb = openpyxl.load_workbook(caminho_entrada)
     
     # Preparar Geradoras
@@ -45,14 +45,14 @@ def safe_write(ws, col, row, value):
 def salvar_dados_multiplos(wb, dados_estruturados, grupo):
     """Mapeia e escreve os dados nas abas corretas dependendo do grupo (A ou B)."""
     
-    # Mapa para o Grupo A: Deve bater com o formato "jan/25" da planilha de dimensionamento
+    # Mapa para o Grupo A: jan/25, fev/25...
     mapa_meses_a = {
         "JAN": "jan/25", "FEV": "fev/25", "MAR": "mar/25", "ABR": "abr/25",
         "MAI": "mai/25", "JUN": "jun/25", "JUL": "jul/25", "AGO": "ago/25",
         "SET": "set/25", "OUT": "out/25", "NOV": "nov/25", "DEZ": "dez/25"
     }
 
-    # Mapa para o Grupo B: Formato padrão "Jan"
+    # Mapa para o Grupo B: Jan, Fev, Mar...
     mapa_meses_b = {
         "JAN": "Jan", "FEV": "Fev", "MAR": "Mar", "ABR": "Abr",
         "MAI": "Mai", "JUN": "Jun", "JUL": "Jul", "AGO": "Ago",
@@ -64,11 +64,17 @@ def salvar_dados_multiplos(wb, dados_estruturados, grupo):
         indice = item['indice']
         faturas = item['dados']
 
-        # Definir nome da aba destino
-        if tipo == 'geradora':
-            nome_aba = "UC GERADORA" if indice == 1 and "UC GERADORA" in wb.sheetnames else f"UC GERADORA {indice}"
+        # Lógica de nomes de abas
+        if grupo == "A":
+            # Tenta encontrar a aba específica de dimensionamento ou a padrão
+            nome_aba = "GRUPO A" if "GRUPO A" in wb.sheetnames else f"UC BENEF. {indice}"
+            if tipo == 'geradora' and "UC GERADORA" in wb.sheetnames:
+                nome_aba = "UC GERADORA" if indice == 1 else f"UC GERADORA {indice}"
         else:
-            nome_aba = f"UC BENEF. {indice}"
+            if tipo == 'geradora':
+                nome_aba = "UC GERADORA" if indice == 1 and "UC GERADORA" in wb.sheetnames else f"UC GERADORA {indice}"
+            else:
+                nome_aba = f"UC BENEF. {indice}"
 
         if nome_aba not in wb.sheetnames:
             continue
@@ -77,7 +83,7 @@ def salvar_dados_multiplos(wb, dados_estruturados, grupo):
 
         if grupo == "B":
             # ===============================
-            # LÓGICA GRUPO B (SIMPLIFICADO)
+            # LÓGICA GRUPO B (BAIXA TENSÃO)
             # ===============================
             cols_base = {
                 'leitura_ant': 'B', 'leitura_atual': 'C', 'geracao': 'I', 
@@ -85,7 +91,6 @@ def salvar_dados_multiplos(wb, dados_estruturados, grupo):
                 'medidor': 'R', 'leitura_med_ant': 'S', 'leitura_med_atual': 'T'
             }
             
-            # Ajuste de colunas se for beneficiária no Grupo B
             if tipo == 'beneficiaria':
                 cols_uso = {
                     **cols_base, 'consumo': 'F', 'credito': 'H', 'valor': 'J', 
@@ -101,7 +106,7 @@ def salvar_dados_multiplos(wb, dados_estruturados, grupo):
                 if mes_excel:
                     for row in range(5, 40):
                         celula = ws[f"A{row}"].value
-                        if celula and str(celula).strip() == mes_excel:
+                        if celula and str(celula).strip().lower() == mes_excel.lower():
                             ws[f"{cols_uso['leitura_ant']}{row}"] = dados.get("data_leitura_anterior")
                             ws[f"{cols_uso['leitura_atual']}{row}"] = dados.get("data_leitura_atual")
                             ws[f"{cols_uso['geracao']}{row}"] = dados.get("energia_gerada")
@@ -116,38 +121,44 @@ def salvar_dados_multiplos(wb, dados_estruturados, grupo):
         
         else:
             # ===============================
-            # LÓGICA GRUPO A (DETALHADO)
+            # LÓGICA GRUPO A (ALTA TENSÃO)
             # ===============================
             for dados in faturas:
                 # 1. Preencher Mês Atual da Fatura
                 mes_ref = mapa_meses_a.get(dados.get("mes"))
                 if mes_ref:
-                    for row in range(5, 18):
+                    for row in range(5, 20):
                         celula_a = str(ws[f"A{row}"].value).strip().lower()
                         if celula_a == mes_ref.lower():
-                            ws[f"B{row}"] = dados.get("c_p")   # Consumo Ponta
-                            ws[f"C{row}"] = dados.get("c_fp")  # Consumo Fora Ponta
-                            ws[f"D{row}"] = dados.get("c_hr")  # Horário Reservado
-                            ws[f"L{row}"] = dados.get("d_p")   # Demanda Ponta
-                            ws[f"M{row}"] = dados.get("d_fp")  # Demanda Fora Ponta
+                            # DADOS DE CONSUMO (Colunas B, C, D)
+                            ws[f"B{row}"] = dados.get("c_p")   
+                            ws[f"C{row}"] = dados.get("c_fp")  
+                            ws[f"D{row}"] = dados.get("c_hr")  
+                            # DADOS DE DEMANDA (Colunas L, M, N)
+                            ws[f"L{row}"] = dados.get("d_p")   
+                            ws[f"M{row}"] = dados.get("d_fp")  
+                            ws[f"N{row}"] = dados.get("d_hr") # Incluída Demanda Reservada
                             break
 
-                # 2. Preencher Histórico Retroativo
+                # 2. Preencher Histórico Retroativo (Preenchimento Automático)
                 if "historico" in dados and dados["historico"]:
                     for h in dados["historico"]:
                         mes_h = mapa_meses_a.get(h['mes'])
-                        # Pula se for o mês da própria fatura (já preenchido acima)
+                        # Pula o mês atual para não duplicar
                         if not mes_h or mes_h.lower() == str(mes_ref).lower():
                             continue
                         
-                        for row in range(5, 18):
+                        for row in range(5, 20):
                             celula_a = str(ws[f"A{row}"].value).strip().lower()
                             if celula_a == mes_h.lower():
+                                # Consumo
                                 ws[f"B{row}"] = h.get('consumo_p')
                                 ws[f"C{row}"] = h.get('consumo_fp')
                                 ws[f"D{row}"] = h.get('consumo_hr')
+                                # Demanda
                                 ws[f"L{row}"] = h.get('demanda_p')
                                 ws[f"M{row}"] = h.get('demanda_fp')
+                                ws[f"N{row}"] = h.get('demanda_hr')
                                 break
                                 
     return wb
