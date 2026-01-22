@@ -71,9 +71,9 @@ def salvar_dados_A(wb, dados_estruturados):
                         ws_geral[f"C{row}"] = dados.get("c_fp", 0.0)
                         ws_geral[f"D{row}"] = dados.get("c_hr", 0.0)
                         # Demanda (Colunas L, M, N)
-                        ws_geral[f"L{row}"] = dados.get("d_p", 0.0)
-                        ws_geral[f"M{row}"] = dados.get("d_fp", 0.0)
-                        ws_geral[f"N{row}"] = dados.get("d_hr", 0.0)
+                        ws_geral[f"M{row}"] = dados.get("d_p", 0.0)
+                        ws_geral[f"N{row}"] = dados.get("d_fp", 0.0)
+                        ws_geral[f"O{row}"] = dados.get("d_hr", 0.0)
                         break
 
             # --- PREENCHIMENTO NA ABA DA UC --- 
