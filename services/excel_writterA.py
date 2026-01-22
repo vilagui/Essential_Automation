@@ -1,5 +1,6 @@
 import openpyxl
 from openpyxl.cell.cell import MergedCell
+import datetime
 
 def preparar_planilha(caminho_entrada, qtd_geradoras, qtd_beneficiarias):
     wb = openpyxl.load_workbook(caminho_entrada)
@@ -24,7 +25,6 @@ def preparar_planilha(caminho_entrada, qtd_geradoras, qtd_beneficiarias):
             else: 
                 nova = wb.copy_worksheet(ws_modelo_ben)
                 nova.title = nome_aba
-
     return wb
 
 def safe_write(ws, col, row, value):
@@ -38,19 +38,19 @@ def safe_write(ws, col, row, value):
     else:
         cell.value = value
 
-def salvar_dados_multiplos(wb, dados_estruturados):
+def salvar_dados_multiplos(wb, dados_estruturados, grupo):
     mapa_meses = {
         "JAN": "Jan", "FEV": "Fev", "MAR": "Mar", "ABR": "Abr",
         "MAI": "Mai", "JUN": "Jun", "JUL": "Jul", "AGO": "Ago",
         "SET": "Set", "OUT": "Out", "NOV": "Nov", "DEZ": "Dez"
     }
 
-    # Definição das Colunas BASE
+    # Definição das Colunas BASE (conforme image_c84419.png)
     cols = {
         'leitura_ant': 'B', 'leitura_atual': 'C',
         'geracao': 'I', 'credito': 'J',
         'consumo': 'K', 'valor': 'N',
-        'saldo': 'P', # Padrão para Geradora
+        'saldo': 'P', 
         'medidor': 'R', 'leitura_med_ant': 'S', 'leitura_med_atual': 'T'
     }
 
@@ -59,96 +59,77 @@ def salvar_dados_multiplos(wb, dados_estruturados):
         indice = item['indice']
         faturas = item['dados']
         
-        # Nome da aba
         if tipo == 'geradora':
             nome_aba = "UC GERADORA" if indice == 1 and "UC GERADORA" in wb.sheetnames else f"UC GERADORA {indice}"
-            col_saldo_atual = 'P' # Geradora usa P
+            col_saldo_atual = 'P'
             cols_uso = cols 
         else:
             nome_aba = f"UC BENEF. {indice}"
-            col_saldo_atual = 'Q' # Beneficiária usa Q (SOLICITADO)
+            col_saldo_atual = 'Q' # Coluna de Balanço/Saldo para beneficiária
             cols_uso = {
-            **cols,
-            'consumo': 'F',
-            'credito': 'H',
-            'valor': 'J',
-            'medidor': 'S',
-            'leitura_med_ant': 'T', 
-            'leitura_med_atual': 'U'
+                **cols,
+                'consumo': 'F', # Coluna E. Fornecida (Consumo)
+                'credito': 'H', # Coluna E. Injetada (Compensada)
+                'valor': 'J',   # Coluna Valor Fatura
+                'medidor': 'S',
+                'leitura_med_ant': 'T', 
+                'leitura_med_atual': 'U'
             }
+
         if nome_aba in wb.sheetnames:
             ws = wb[nome_aba]
 
             for dados in faturas:
-                # --- 1. DADOS DO MÊS ATUAL (DA FATURA) ---
+                # --- 1. DADOS DO MÊS ATUAL ---
                 mes_pdf = dados.get("mes", "")
                 if mes_pdf and mes_pdf in mapa_meses:
-                    mes_excel = mapa_meses[mes_pdf]
+                    mes_excel_alvo = mapa_meses[mes_pdf].upper()
 
-                    # Achar linha
                     linha_destino = None
                     for row in range(5, 40):
                         celula = ws[f"A{row}"].value
-                        if celula and str(celula).strip() == mes_excel:
-                            linha_destino = row
-                            break
+                        if celula:
+                            # Trata se a célula for uma Data do Excel ou Texto
+                            texto_celula = celula.strftime("%b") if isinstance(celula, datetime.datetime) else str(celula)
+                            if texto_celula.strip().upper()[:3] == mes_excel_alvo[:3]:
+                                linha_destino = row
+                                break
                         
                     if linha_destino:
-                        # Preenche tudo
-                        ws[f"{cols['leitura_ant']}{linha_destino}"] = dados["data_leitura_anterior"]
-                        ws[f"{cols['leitura_atual']}{linha_destino}"] = dados["data_leitura_atual"]
-                        ws[f"{cols['geracao']}{linha_destino}"] = dados["energia_gerada"]
-                        ws[f"{cols_uso['credito']}{linha_destino}"] = dados["credito_recebido"]
-                        ws[f"{cols_uso['consumo']}{linha_destino}"] = dados["energia_ativa"]
-                        ws[f"{cols_uso['valor']}{linha_destino}"] = dados["valor_fatura"]
-                        ws[f"{col_saldo_atual}{linha_destino}"] = dados["saldo"] # P ou Q
-                        ws[f"{cols_uso['medidor']}{linha_destino}"] = dados["medidor"]
-                        ws[f"{cols_uso['leitura_med_ant']}{linha_destino}"] = dados["leitura_anterior"]
-                        ws[f"{cols_uso['leitura_med_atual']}{linha_destino}"] = dados["leitura_atual"]
+                        ws[f"{cols_uso['leitura_ant']}{linha_destino}"] = dados.get("data_leitura_anterior")
+                        ws[f"{cols_uso['leitura_atual']}{linha_destino}"] = dados.get("data_leitura_atual")
+                        ws[f"{cols_uso['geracao']}{linha_destino}"] = dados.get("energia_gerada")
+                        ws[f"{cols_uso['credito']}{linha_destino}"] = dados.get("credito_recebido")
+                        ws[f"{cols_uso['consumo']}{linha_destino}"] = dados.get("energia_ativa")
+                        ws[f"{cols_uso['valor']}{linha_destino}"] = dados.get("valor_fatura")
+                        ws[f"{col_saldo_atual}{linha_destino}"] = dados.get("saldo")
+                        ws[f"{cols_uso['medidor']}{linha_destino}"] = dados.get("medidor")
 
                 # --- 2. PREENCHIMENTO RETROATIVO (HISTÓRICO) ---
-                # Útil se enviou apenas 1 fatura e quer preencher os consumos anteriores
                 if "historico" in dados and dados["historico"]:
                     for hist in dados["historico"]:
-                        mes_hist = hist['mes']
+                        mes_hist = hist['mes'].upper()
                         if mes_hist in mapa_meses:
-                            mes_excel_hist = mapa_meses[mes_hist]
-                            
-                            # Busca a linha do mês histórico
                             linha_hist = None
                             for row in range(5, 40):
                                 celula = ws[f"A{row}"].value
-                                if celula and str(celula).strip() == mes_excel_hist:
-                                    linha_hist = row
-                                    break
+                                if celula:
+                                    texto_celula = celula.strftime("%b") if isinstance(celula, datetime.datetime) else str(celula)
+                                    if texto_celula.strip().upper()[:3] == mes_hist[:3]:
+                                        linha_hist = row
+                                        break
                             
-                            # Se achou a linha e a célula de consumo está vazia (para não sobrescrever dados reais)
-                            if linha_hist:
-                                 # Não sobrescrever o mês da fatura atual
-                                if mes_hist != dados.get("mes"):
+                            if linha_hist and mes_hist != dados.get("mes", "").upper():
+                                # Preenche apenas se a célula estiver vazia
+                                if not ws[f"{cols_uso['consumo']}{linha_hist}"].value:
                                     ws[f"{cols_uso['consumo']}{linha_hist}"] = hist['consumo']
-                                    print(f"Histórico preenchido: {mes_hist}/{hist['ano']} "f"- {hist['consumo']} kWh na aba {nome_aba}")
-                        
+
     # --- 3. RESUMO (UC e Endereço) ---
-    ws_resumo = None
-    for sheet in wb.sheetnames:
-        if "RESUMO" in sheet.upper():
-            ws_resumo = wb[sheet]
-            break
-    
+    ws_resumo = next((wb[s] for s in wb.sheetnames if "RESUMO" in s.upper()), None)
     if ws_resumo:
         linha_atual = 7
-        # Geradoras
         for item in dados_estruturados:
-            if item['tipo'] == 'geradora' and item['dados']:
-                dados_ref = item['dados'][0]
-                safe_write(ws_resumo, "F", linha_atual, dados_ref.get("uc", ""))
-                safe_write(ws_resumo, "G", linha_atual, dados_ref.get("endereco", ""))
-                linha_atual += 1
-        
-        # Beneficiárias
-        for item in dados_estruturados:
-            if item['tipo'] == 'beneficiaria' and item['dados']:
+            if item['dados']:
                 dados_ref = item['dados'][0]
                 safe_write(ws_resumo, "F", linha_atual, dados_ref.get("uc", ""))
                 safe_write(ws_resumo, "G", linha_atual, dados_ref.get("endereco", ""))
