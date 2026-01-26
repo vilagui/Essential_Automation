@@ -83,11 +83,10 @@ def salvar_dados_A(wb, dados_estruturados):
                         c_total = dados.get("c_p", 0) + dados.get("c_fp", 0) + dados.get("c_hr", 0)
 
                         if tipo == 'geradora':
-                            ws_uc[f"G{row}"] = dados.get("energia_gerada", 0.0)
-                            ws_uc[f"H{row}"] = dados.get("credito_recebido", 0.0)
-                            ws_uc[f"I{row}"] = c_total
-                            ws_uc[f"L{row}"] = dados.get("valor_fatura", 0.0)
-                            ws_uc[f"M{row}"] = dados.get("saldo", 0.0)
+                            ws_uc[f"I{row}"] = dados.get("energia_gerada", 0.0)
+                            ws_uc[f"J{row}"] = dados.get("credito_recebido", 0.0)
+                            ws_uc[f"N{row}"] = dados.get("valor_fatura", 0.0)
+                            ws_uc[f"P{row}"] = dados.get("saldo", 0.0)
                         else:
                             ws_uc[f"F{row}"] = c_total
                             ws_uc[f"H{row}"] = dados.get("credito_recebido", 0.0)
