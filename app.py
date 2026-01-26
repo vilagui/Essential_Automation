@@ -114,7 +114,7 @@ if arquivo_excel:
                 st.download_button(
                     label="📥 Baixar Resultado Final",
                     data=output.getvalue(),
-                    file_name=f"BALANCO_CONSOLIDADO_GRUPO_{grupo_selecionado}.xlsx",
+                    file_name=f"BALANCO_COMPENSAÇÃO_GRUPO_{grupo_selecionado}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             except Exception as e:
