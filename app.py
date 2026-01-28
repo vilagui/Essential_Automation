@@ -8,13 +8,14 @@ from services.fatura_mapperA import extrair_fatura as extrair_A
 from services.excel_writer import preparar_planilha as prep_B, salvar_dados_multiplos as salvar_B
 from services.excel_writterA import preparar_planilha as prep_A, salvar_dados_A as salvar_A
 
-st.set_page_config(page_title="Balanço Multi-UC", layout="wide")
+st.set_page_config(page_title="Balanço Multi-UC", layout="wide", page_icon="logo3.png")
 
-st.title("⚡ Sistema de Balanço Energético")
+st.title("Sistema de Balanço Energético")
 st.subheader("Essencial Energia Eficiente")
 
 # --- BARRA LATERAL PARA CONFIGURAÇÃO ---
 with st.sidebar:
+    st.image("logo3.png", use_container_width=True)
     st.header("⚙️ Configuração")
     
     # 1. Input crucial: Define qual lógica de código o sistema seguirá
@@ -25,8 +26,8 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    qtd_geradoras = st.number_input("Qtd. de UC Geradoras", min_value=1, value=1, step=1)
-    qtd_beneficiarias = st.number_input("Qtd. de UC Beneficiárias", min_value=0, value=0, step=1)
+    qtd_geradoras = st.number_input("Qtd. de UCs Geradoras", min_value=1, value=1, step=1)
+    qtd_beneficiarias = st.number_input("Qtd. de UCs Beneficiárias", min_value=0, value=0, step=1)
 
 # --- 2. UPLOAD DA PLANILHA BASE ---
 st.subheader("1. Planilha Modelo")
