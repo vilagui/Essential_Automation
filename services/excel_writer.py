@@ -76,7 +76,7 @@ def salvar_dados_multiplos(wb, dados_estruturados):
             'medidor': 'S',
             'leitura_med_ant': 'T', 
             'leitura_med_atual': 'U'
-            }
+            }           
         if nome_aba in wb.sheetnames:
             ws = wb[nome_aba]
 
